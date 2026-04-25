@@ -1,0 +1,26 @@
+### 2. `.gitignore` (Git 忽略文件)
+
+为了防止将不必要的缓存文件或虚拟环境提交到 GitHub，这个文件至关重要。
+
+```text
+# Python 字节码
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+venv/
+ENV/
+env/
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 用户私有配置与临时数据
+data/config.json
+*.log
+
+# 操作系统文件
+Thumbs.db
+.DS_Store

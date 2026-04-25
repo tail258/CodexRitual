@@ -1,0 +1,22 @@
+[
+  {"text": "Talk is cheap. Show me the code.", "author": "Linus Torvalds"},
+  {"text": "代码写得好，下班下得早。", "author": "佚名"},
+  {"text": "Any fool can write code that a computer can understand. Good programmers write code that humans can understand.", "author": "Martin Fowler"},
+  {"text": "Done is better than perfect.", "author": "Sheryl Sandberg"},
+  {"text": "Programs must be written for people to read, and only incidentally for machines to execute.", "author": "Harold Abelson"},
+  {"text": "First, solve the problem. Then, write the code.", "author": "John Johnson"},
+  {"text": "Make it work, make it right, make it fast.", "author": "Kent Beck"},
+  {"text": "The best error message is the one that never shows up.", "author": "Thomas Fuchs"},
+  {"text": "If debugging is the process of removing software bugs, then programming must be the process of putting them in.", "author": "Edsger W. Dijkstra"},
+  {"text": "It’s not a bug — it’s an undocumented feature.", "author": "佚名"},
+  {"text": "The only way to learn a new programming language is by writing programs in it.", "author": "Dennis Ritchie"},
+  {"text": "Before software can be reusable it first has to be usable.", "author": "Ralph Johnson"},
+  {"text": "Code is like humor. When you have to explain it, it’s bad.", "author": "Cory House"},
+  {"text": "不要重复造轮子 (Don't reinvent the wheel)。", "author": "佚名"},
+  {"text": "Simplicity is the soul of efficiency.", "author": "Austin Freeman"},
+  {"text": "A good programmer is someone who always looks both ways before crossing a one-way street.", "author": "Doug Linder"},
+  {"text": "There are only two hard things in Computer Science: cache invalidation and naming things.", "author": "Phil Karlton"},
+  {"text": "Measuring programming progress by lines of code is like measuring airplane building progress by weight.", "author": "Bill Gates"},
+  {"text": "人生苦短，我用 Python。", "author": "佚名"},
+  {"text": "Sometimes it pays to stay in bed on Monday, rather than spending the rest of the week debugging Monday's code.", "author": "Dan Salomon"}
+]
