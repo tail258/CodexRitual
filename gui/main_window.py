@@ -1,27 +1,31 @@
 import json
 import random
 import time
+import sys
+import shutil
 from pathlib import Path
 from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, 
                              QLabel, QFrame, QPushButton, QComboBox, QSizePolicy,
-                             QDialog, QSlider, QFormLayout, QMessageBox, QLCDNumber)
+                             QDialog, QSlider, QFormLayout, QMessageBox, QLCDNumber,
+                             QSplitter, QTextBrowser, QLineEdit,QFileDialog)
 from PyQt6.QtGui import QPixmap, QMovie
 from PyQt6.QtCore import Qt, QTimer
 
 from .editor_widget import CodePracticeCanvas
 from .theme_manager import ThemeManager
 from core.typing_logic import TypingMapBuilder
+from core.ai_bridge import AITaskWorker
 
-# --- 这里保留你原来的 SettingsDialog 类 ---
 class SettingsDialog(QDialog):
-    def __init__(self, theme_manager: ThemeManager, parent=None):
+    def __init__(self, theme_manager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("系统设置")
-        self.setFixedSize(300, 150)
+        self.setFixedSize(350, 220) # 稍微加大窗口以容纳新选项
         self.theme_manager = theme_manager
         
         layout = QFormLayout(self)
         
+        # 1. 界面主题
         self.combo_theme = QComboBox()
         self.combo_theme.addItem("浅色 (Light)", "light")
         self.combo_theme.addItem("深色 (Dark)", "dark")
@@ -30,11 +34,25 @@ class SettingsDialog(QDialog):
         self.combo_theme.currentIndexChanged.connect(self._on_theme_changed)
         layout.addRow("界面主题:", self.combo_theme)
         
+        # 2. 背景透明度
         self.slider_opacity = QSlider(Qt.Orientation.Horizontal)
         self.slider_opacity.setRange(10, 100)
         self.slider_opacity.setValue(int(self.theme_manager.opacity * 100))
         self.slider_opacity.valueChanged.connect(self._on_opacity_changed)
         layout.addRow("背景透明度:", self.slider_opacity)
+
+        # 3. 【新增】API Key 密码输入框
+        self.input_api_key = QLineEdit()
+        self.input_api_key.setEchoMode(QLineEdit.EchoMode.Password) # 密码掩码保护
+        self.input_api_key.setPlaceholderText("填入你的 DeepSeek API Key")
+        self.input_api_key.setText(self.theme_manager.api_key)
+        self.input_api_key.textChanged.connect(self._on_api_key_changed)
+        layout.addRow("API 密钥:", self.input_api_key)
+
+        # 4. 【新增】一键导入代码按钮
+        self.btn_import = QPushButton("📁 选择本地文件导入...")
+        self.btn_import.clicked.connect(self._import_code)
+        layout.addRow("外部代码:", self.btn_import)
 
     def _on_theme_changed(self, index):
         theme_id = self.combo_theme.itemData(index)
@@ -48,7 +66,35 @@ class SettingsDialog(QDialog):
         self.parent().setWindowOpacity(opacity)
         self.theme_manager.save_config()
 
-# --- 新增的庆祝动画弹窗类 ---
+    def _on_api_key_changed(self, text):
+        self.theme_manager.api_key = text.strip()
+        self.theme_manager.save_config()
+
+    def _import_code(self):
+        """处理文件导入逻辑"""
+        main_win = self.parent()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择练习代码", "", 
+            "代码文件 (*.py *.js *.cpp *.c *.java *.go *.txt);;所有文件 (*)"
+        )
+        if file_path:
+            try:
+                dest_dir = main_win.snippets_dir
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest_path = dest_dir / Path(file_path).name
+                shutil.copy2(file_path, dest_path) # 将文件复制到 assets/snippets/
+                
+                # 通知主窗口刷新列表并选中新文件
+                main_win._scan_and_load_snippets()
+                index = main_win.combo_snippet.findText(dest_path.name)
+                if index >= 0:
+                    main_win.combo_snippet.setCurrentIndex(index)
+                    
+                QMessageBox.information(self, "导入成功", f"文件 '{dest_path.name}' 成功加入练习代码！")
+            except Exception as e:
+                QMessageBox.critical(self, "导入失败", f"无法复制文件: {e}")
+
+# --- 庆祝动画弹窗类 ---
 class CompletionDialog(QDialog):
     def __init__(self, time_spent: float, base_dir: Path, parent=None):
         super().__init__(parent)
@@ -84,14 +130,27 @@ class CompletionDialog(QDialog):
         lbl_stats.setStyleSheet("font-size: 16px; font-weight: bold; margin-top: 15px;")
         layout.addWidget(lbl_stats)
 
-# --- 终极整合版主窗口 ---
+# --- 整合版主窗口 ---
 class CodeRunnerWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Code Speed Runner")
+        self.setWindowTitle("CodexRitual") # 顺手把名字也统一了
         self.resize(1200, 800)
         
-        self.base_dir = Path(__file__).resolve().parent.parent
+        # 1. 探明真身：确定内部资源路径 (处理 PyInstaller 打包为 exe 的情况)
+        if getattr(sys, 'frozen', False):
+            self.internal_dir = Path(sys._MEIPASS)
+        else:
+            self.internal_dir = Path(__file__).resolve().parent.parent
+            
+        # 2. 锁定外部领地：用户数据路径
+        self.user_data_dir = Path.home() / "Documents" / "CodexRitual_Data"
+        
+        # 3. 首次运行：释放资源到外部领地
+        self._init_user_directory()
+        
+        # 4. 外置工作路径的指针
+        self.base_dir = self.user_data_dir
         self.keyboard_dir = self.base_dir / "assets" / "keyboards"
         self.snippets_dir = self.base_dir / "assets" / "snippets"
         self.quotes_file = self.base_dir / "data" / "quotes.json"
@@ -117,9 +176,19 @@ class CodeRunnerWindow(QMainWindow):
         self.quote_timer.timeout.connect(self._rotate_quote)
         self.quote_timer.start(30000)
         
-        # --- 连接画布的开始和结束信号 ---
         self.canvas.signal_started.connect(self._on_typing_started)
         self.canvas.signal_finished.connect(self._on_typing_finished)
+
+    def _init_user_directory(self):
+        """核心本能：如果用户文档里没有数据文件夹，自动释放内置的 assets 和 data"""
+        if not self.user_data_dir.exists():
+            self.user_data_dir.mkdir(parents=True, exist_ok=True)
+            
+            for folder in ["assets", "data"]:
+                src = self.internal_dir / folder
+                dst = self.user_data_dir / folder
+                if src.exists():
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
 
     def apply_global_theme(self):
         self.setStyleSheet(self.theme_manager.get_stylesheet())
@@ -140,33 +209,71 @@ class CodeRunnerWindow(QMainWindow):
         self.combo_snippet.setMinimumWidth(200)
         self.combo_snippet.currentIndexChanged.connect(self._on_snippet_changed)
         
-        # --- 新增的 LCD 计时器 ---
         self.lcd_timer = QLCDNumber()
         self.lcd_timer.setSegmentStyle(QLCDNumber.SegmentStyle.Flat)
         self.lcd_timer.setMinimumWidth(120)
         self.lcd_timer.setStyleSheet("color: #007ACC; border: none; font-weight: bold;")
         self.lcd_timer.display("00:00")
         
-        self.btn_settings = QPushButton("⚙️ 设置")
-        self.btn_settings.clicked.connect(self._open_settings)
+        self.btn_toggle_timer = QPushButton("隐藏计时")
+        self.btn_toggle_timer.clicked.connect(self._toggle_timer_visibility)
+
+        self.btn_ai_gen = QPushButton("✨ 一键生成注释")
+        self.btn_ai_gen.setStyleSheet("color: #4EC9B0; font-weight: bold;")
+        self.btn_ai_gen.clicked.connect(self._generate_ai_comments)
+        
+        # --- 【新增】AI 面板切换按钮 ---
+        self.btn_toggle_ai = QPushButton("隐藏 AI")
+        self.btn_toggle_ai.clicked.connect(self._toggle_ai_panel)
         
         self.btn_toggle_keyboard = QPushButton("⌨️ 侧边栏")
         self.btn_toggle_keyboard.clicked.connect(self._toggle_sidebar)
+
+        self.btn_settings = QPushButton("⚙️ 设置")
+        self.btn_settings.clicked.connect(self._open_settings)
         
+        # 组装顶部栏 (将三个视图控制按钮放在右侧)
         top_bar.addWidget(label_snippet)
         top_bar.addWidget(self.combo_snippet)
-        top_bar.addWidget(self.lcd_timer) # 将计时器放在下拉框旁边
-        top_bar.addStretch()
-        top_bar.addWidget(self.btn_settings)
+        top_bar.addWidget(self.lcd_timer) 
+        top_bar.addWidget(self.btn_toggle_timer)
+        top_bar.addWidget(self.btn_ai_gen) 
+        top_bar.addStretch() # 把后面的按钮推到最右边
+        top_bar.addWidget(self.btn_toggle_ai)      # 新增的 AI 切换按钮
         top_bar.addWidget(self.btn_toggle_keyboard)
+        top_bar.addWidget(self.btn_settings)
         main_layout.addLayout(top_bar)
         
-        # 2. 工作区与画布
-        workspace_layout = QHBoxLayout()
+        # 2. 工作区与画布 (使用 QSplitter 进行左右分割)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # 左侧 AI 对话区
+        self.ai_panel = QWidget()
+        ai_layout = QVBoxLayout(self.ai_panel)
+        ai_layout.setContentsMargins(0, 0, 10, 0)
+        
+        self.chat_display = QTextBrowser()
+        self.chat_display.setStyleSheet("font-family: Microsoft YaHei; font-size: 13px;")
+        self.chat_display.append("<b>[系统]</b> CodexRitual AI 导师已上线。点击顶部「一键生成注释」开始施法。")
+        
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("Enter and discuss with AI ...")
+        self.chat_input.returnPressed.connect(self._send_chat_message)
+        
+        ai_layout.addWidget(QLabel("Communicate With AI"))
+        ai_layout.addWidget(self.chat_display, stretch=1)
+        ai_layout.addWidget(self.chat_input)
+        
+        self.main_splitter.addWidget(self.ai_panel)
+        
+        # 右侧：原有的代码区 + 指法图侧边栏
+        right_panel = QWidget()
+        workspace_layout = QHBoxLayout(right_panel)
+        workspace_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.canvas = CodePracticeCanvas()
         workspace_layout.addWidget(self.canvas, stretch=7)
         
-        # 3. 侧边栏
         self.sidebar_frame = QFrame()
         self.sidebar_frame.setFixedWidth(350)
         sidebar_layout = QVBoxLayout(self.sidebar_frame)
@@ -179,12 +286,16 @@ class CodeRunnerWindow(QMainWindow):
         sidebar_layout.addWidget(self.img_keyboard, stretch=1)
         workspace_layout.addWidget(self.sidebar_frame, stretch=3)
         
-        main_layout.addLayout(workspace_layout)
+        self.main_splitter.addWidget(right_panel)
+        self.main_splitter.setSizes([300, 900]) 
+        
+        # --- 【核心修复】加上 stretch=1，强制分割器填满多余的垂直空间 ---
+        main_layout.addWidget(self.main_splitter, stretch=1)
         
         # 4. 底部栏
         self.footer_label = QLabel()
         self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.footer_label.setStyleSheet("font-family: Microsoft YaHei; font-size: 13px; font-style: italic;")
+        self.footer_label.setStyleSheet("font-family: Microsoft YaHei; font-size: 13px; font-style: italic; margin-top: 10px;")
         main_layout.addWidget(self.footer_label)
 
     # --- 计时器与完成动画逻辑 ---
@@ -273,6 +384,26 @@ class CodeRunnerWindow(QMainWindow):
     def _toggle_sidebar(self):
         self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
 
+    def _toggle_sidebar(self):
+        self.sidebar_frame.setVisible(not self.sidebar_frame.isVisible())
+
+    def _toggle_ai_panel(self):
+        """控制左侧 AI 对话舱的显示与隐藏"""
+        if self.ai_panel.isVisible():
+            self.ai_panel.setVisible(False)
+            self.btn_toggle_ai.setText("显示 AI")
+        else:
+            self.ai_panel.setVisible(True)
+            self.btn_toggle_ai.setText("隐藏 AI")
+
+    def _toggle_timer_visibility(self):
+        if self.lcd_timer.isVisible():
+            self.lcd_timer.setVisible(False)
+            self.btn_toggle_timer.setText("显示计时")
+        else:
+            self.lcd_timer.setVisible(True)
+            self.btn_toggle_timer.setText("隐藏计时")
+
     def _scan_and_load_keyboards(self):
         self.combo_keyboard.clear()
         if not self.keyboard_dir.exists(): return
@@ -285,3 +416,79 @@ class CodeRunnerWindow(QMainWindow):
         pixmap = QPixmap(self.combo_keyboard.itemData(index))
         if not pixmap.isNull():
             self.img_keyboard.setPixmap(pixmap.scaled(320, 800, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+    # =============== AI链路逻辑 ================
+    def _generate_ai_comments(self):
+        """一键触发 AI 注释生成"""
+        current_code = self.canvas.toPlainText()
+        if not current_code.strip():
+            QMessageBox.warning(self, "无法施法", "当前画布为空，没有可供分析的代码！")
+            return
+            
+        # 1. 加载提示词技能
+        skill_path = self.base_dir / "data" / "ai_skill.txt"
+        system_prompt = "请为代码添加详尽中文注释，只输出代码本身。"
+        if skill_path.exists():
+            with open(skill_path, 'r', encoding='utf-8') as f:
+                system_prompt = f.read()
+                
+        # 2. 动态读取 API Key
+        api_key = self.theme_manager.api_key
+        
+        if not api_key:
+            QMessageBox.warning(self, "缺少魔力源泉", "请先点击右上角的「⚙️ 设置」，填入你的 AI API 密钥！")
+            return
+            
+        # 3. 锁定按钮与 UI 状态
+        self.btn_ai_gen.setEnabled(False)
+        self.btn_ai_gen.setText("⏳ AI 灵魂注入中...")
+        self.chat_display.append("<br><b>[系统]</b> 正在向 DeepSeek 传输代码结构，请稍候...")
+        
+        # 4. 启动异步后台神经元
+        self.ai_worker = AITaskWorker("deepseek", api_key, current_code, system_prompt)
+        self.ai_worker.signal_finished.connect(self._on_ai_success)
+        self.ai_worker.signal_error.connect(self._on_ai_error)
+        self.ai_worker.start()
+
+    def _on_ai_success(self, new_code: str):
+        """AI 处理成功，执行文件流转"""
+        self.btn_ai_gen.setEnabled(True)
+        self.btn_ai_gen.setText("✨ 一键生成注释")
+        
+        # 构建新文件名 (在原文件后加上 _AI_Commented)
+        original_name = self.combo_snippet.currentText()
+        if not original_name: original_name = "practice.py"
+        parts = original_name.rsplit('.', 1)
+        base_name = parts[0]
+        ext = parts[1] if len(parts) > 1 else "py"
+        new_filename = f"{base_name}_AI_Commented.{ext}"
+        
+        # 写入物理文件
+        save_path = self.snippets_dir / new_filename
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(new_code)
+            
+        # 重新扫描文件夹并强制跳转到新生成的代码上
+        self._scan_and_load_snippets()
+        index = self.combo_snippet.findText(new_filename)
+        if index >= 0:
+            self.combo_snippet.setCurrentIndex(index)
+            
+        self.chat_display.append("<br><span style='color:#4EC9B0;'><b>[系统]</b> 注入完成！新代码已自动加载，高亮引擎已就绪。</span>")
+
+    def _on_ai_error(self, error_msg: str):
+        """处理网络或环境异常"""
+        self.btn_ai_gen.setEnabled(True)
+        self.btn_ai_gen.setText("✨ 一键生成注释")
+        QMessageBox.critical(self, "AI 连接断开", error_msg)
+        self.chat_display.append(f"<br><span style='color:#FF8080;'><b>[错误]</b> {error_msg}</span>")
+
+    def _send_chat_message(self):
+        """处理左侧对话框的用户输入"""
+        user_text = self.chat_input.text().strip()
+        if not user_text: return
+        self.chat_display.append(f"<br><b>🧑‍💻 你:</b> {user_text}")
+        self.chat_input.clear()
+        
+        # 预留给未来的纯聊天接口
+        self.chat_display.append("<b>🤖 AI:</b> (聊天对话链路正在接入中...目前请先使用顶栏的一键注释功能！)")

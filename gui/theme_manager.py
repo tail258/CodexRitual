@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 from PyQt6.QtGui import QColor
 
@@ -15,12 +16,23 @@ class ThemeManager:
             "app_fg": "#333333",
             "canvas_bg": "#FFFFFF",
             "colors": {
-                "default": QColor("#B0B0B0"),
-                "correct": QColor("#007ACC"),
+                "default": QColor("#B0B0B0"), 
+                "correct": QColor("#333333"), 
                 "error_bg": QColor("#FFCCCC"),
                 "error_fg": QColor("#FF0000"),
+                "cursor_bg": QColor("#D0D0D0"),
                 "skip": QColor("#E0E0E0"),
-                "cursor_bg": QColor("#D0D0D0")
+                "syntax": {
+                    "comment": QColor("#008000"),
+                    "keyword": QColor("#0000FF"),
+                    "string": QColor("#A31515"),
+                    "number": QColor("#098658"),
+                    "function": QColor("#795E26"),
+                    "class": QColor("#267F99"),
+                    "tag": QColor("#800000"),
+                    "attribute": QColor("#E50000"),
+                    "default": QColor("#333333")
+                }
             }
         },
         "dark": {
@@ -29,20 +41,35 @@ class ThemeManager:
             "app_fg": "#D4D4D4",
             "canvas_bg": "#252526",
             "colors": {
-                "default": QColor("#666666"),
-                "correct": QColor("#4EC9B0"), # VS Code 深色主题经典的青色
+                "default": QColor("#555555"), 
+                "correct": QColor("#D4D4D4"), 
                 "error_bg": QColor("#5A1D1D"),
                 "error_fg": QColor("#FF8080"),
+                "cursor_bg": QColor("#4A4A4A"),
                 "skip": QColor("#3A3A3A"),
-                "cursor_bg": QColor("#4A4A4A")
+                "syntax": {
+                    "comment": QColor("#6A9955"),
+                    "keyword": QColor("#C586C0"),
+                    "string": QColor("#CE9178"),
+                    "number": QColor("#B5CEA8"),
+                    "function": QColor("#DCDCAA"),
+                    "class": QColor("#4EC9B0"),
+                    "tag": QColor("#569CD6"),
+                    "attribute": QColor("#9CDCFE"),
+                    "default": QColor("#D4D4D4") 
+                }
             }
         }
     }
 
     def __init__(self):
-        self.config_path = Path(__file__).resolve().parent.parent / "data" / "config.json"
+        # 将配置文件的路径指向外部的用户数据文件夹
+        self.user_data_dir = Path.home() / "Documents" / "CodexRitual_Data"
+        self.config_path = self.user_data_dir / "data" / "config.json"
+        
         self.current_theme = "light"
-        self.opacity = 1.0  # 1.0 为完全不透明，0.1 为极度透明
+        self.opacity = 1.0  
+        self.api_key = ""  
         self._load_config()
 
     def _load_config(self):
@@ -52,13 +79,19 @@ class ThemeManager:
                     data = json.load(f)
                     self.current_theme = data.get("theme", "light")
                     self.opacity = data.get("opacity", 1.0)
+                    self.api_key = data.get("api_key", "") # 【新增】从文件中读取
             except Exception:
                 pass
 
     def save_config(self):
         self.config_path.parent.mkdir(exist_ok=True)
         with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump({"theme": self.current_theme, "opacity": self.opacity}, f, indent=4)
+            # 【新增】将 api_key 一并存入 JSON
+            json.dump({
+                "theme": self.current_theme, 
+                "opacity": self.opacity,
+                "api_key": self.api_key
+            }, f, indent=4)
 
     def get_canvas_colors(self) -> dict:
         return self.THEMES[self.current_theme]["colors"]

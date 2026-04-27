@@ -58,8 +58,11 @@ class CodePracticeCanvas(QTextEdit):
         
         self.setPlainText(raw_code)
         self.selectAll()
+        
         fmt = QTextCharFormat()
         fmt.setForeground(self.colors.get("default", QColor("#B0B0B0")))
+        fmt.setBackground(QColor(Qt.GlobalColor.transparent))
+        
         self.textCursor().mergeCharFormat(fmt)
         
         cursor = self.textCursor()
@@ -155,12 +158,16 @@ class CodePracticeCanvas(QTextEdit):
 
     def _advance_to_next_typable(self) -> None:
         while self._current_index < len(self._typing_map) and self._typing_map[self._current_index]["is_skip"]:
-            self._set_format(self._current_index, fg=self.colors["skip"])
+            target_node = self._typing_map[self._current_index]
+            category = target_node.get("category", "comment")
+            syntax_color = self.colors.get("syntax", {}).get(category, self.colors.get("skip"))
+            
+            self._set_format(self._current_index, fg=syntax_color)
             self._current_index += 1
             
         if self._current_index < len(self._typing_map):
             self._render_virtual_cursor()
-            self._ensure_cursor_visible() # 触发自动下滑
+            self._ensure_cursor_visible()
 
     def _ensure_cursor_visible(self):
         """核心修正：计算逻辑光标的物理坐标，触发平滑滚动"""
@@ -191,14 +198,18 @@ class CodePracticeCanvas(QTextEdit):
 
     def _apply_char_format(self, index: int, is_correct: bool) -> None:
         if is_correct:
-            self._set_format(index, fg=self.colors["correct"])
+            # 动态获取当前字符应该显示的高亮色
+            target_node = self._typing_map[index]
+            category = target_node.get("category", "default")
+            syntax_color = self.colors.get("syntax", {}).get(category, self.colors["correct"])
+            self._set_format(index, fg=syntax_color)
         else:
             self._set_format(index, fg=self.colors["error_fg"], bg=self.colors["error_bg"])
 
     def _reset_char_format(self, index: int) -> None:
         if index < len(self._typing_map):
-            is_skip = self._typing_map[index].get("is_skip", False)
-            color = self.colors["skip"] if is_skip else self.colors["default"]
+            # 只要退格，熄灭成基础预载灰色
+            color = self.colors["default"]
             self._set_format(index, fg=color, bg=QColor(Qt.GlobalColor.transparent))
 
     def _render_virtual_cursor(self) -> None:

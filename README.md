@@ -1,94 +1,96 @@
-# CodexRitual: 面向编程学者的代码打字练习器
+# CodexRitual
 
-`CodexRitual` 在vibe coding的时代，古法编程已经沦为非物质文化遗产，但Ai没办法帮助学者理解代码。本项目意在通过传统的手敲代码模式，帮助学者理解每一行代码的意义，未来准备接入Ai大模型辅助生成代码的注释，辅助编程学习。
+CodexRitual 是一款专为开发者设计的代码键入练习与理解辅助工具。在 AI 辅助生成的时代，本项目提倡通过“手动键入”的方式加强对代码逻辑的深度理解，并结合大语言模型提供即时的语义解释。
 
-![alt text](image\1.png)
+## 核心特性
 
----
+### 1. 语义化代码解析引擎
+* **逻辑聚焦**：基于 `Pygments` 词法分析，系统能够精准识别代码中的逻辑部分与注释部分。
+* **智能跳过**：自动计算缩进并支持注释、文档字符串（Docstring）的自动跳过模式，确保用户专注于核心代码逻辑的练习。
 
-## 💡 项目创新点 (Innovation)
+### 2. 高级语法高亮系统
+* **IDE 级体验**：内置模拟 VS Code 标准的深色/浅色高亮规则，支持 Python, JavaScript, C++, Go 等多种主流编程语言。
+* **状态动态反馈**：代码初始呈现暗灰色，随用户的正确键入逐字“唤醒”高亮色彩；退格时自动恢复初始状态。
 
-### 1. 语义化打字地图 (Semantic Typing Map)
-* **创新**：系统并非将代码视为“扁平字符串”，而是通过 `Pygments` 进行词法标记。
-* **价值**：能够精准识别 `Comment` 和 `Docstring`。程序会自动通过算法计算出可跳过区域，实现“只练逻辑，不练注释”的高效模式，甚至支持 Python 的三引号文档字符串跳过。
+### 3. AI 导师集成
+* **语义注释生成**：集成 DeepSeek/OpenAI 兼容接口，可一键为当前练习的代码段生成详尽的中文逻辑注释。
+* **交互式学习**：内置 AI 逻辑推演舱，支持针对代码细节进行对话探讨。
 
-### 2. 混合输入状态机 (Hybrid IME Bypass)
-* **创新**：独创的 `inputMethodEvent` 与 `keyPressEvent` 双轨并行机制。
-* **价值**：彻底解决了底层按键拦截与操作系统输入法（IME）的冲突。用户可以在代码字符串中无缝切换中英文输入，且拼音输入过程不会破坏代码的等宽排版。
+### 4. 零配置资产管理
+* **动静分离架构**：程序采用资源自动释放机制。运行时自动在用户文档目录（`Documents/CodexRitual_Data`）建立独立数据区，确保配置与自定义资产（代码片段、指法图）在软件升级或迁移时不丢失。
+* **多模态输入兼容**：深度优化 `inputMethodEvent`，完美兼容操作系统原生中文输入法（IME），解决中英文混输时的排版抖动问题。
 
-### 3. 智能缩进穿透 (Auto-Indent Penetration)
-* **创新**：基于代码上下文的空白符预测算法。
-* **价值**：在换行后，系统会自动根据下一行的缩进深度填充空格并标记为“已完成”，光标直接定位至代码起始处，还原真实的 IDE 开发手感。
+## 环境要求
 
-### 4. 实时渲染性能优化
-* **创新**：放弃 `setText` 的全量刷新，采用 `QTextCursor` 局部增量渲染。
-* **价值**：即使是数千行的长代码，也能保证每一帧敲击的延迟低于 5ms，配合 `QPropertyAnimation` 实现的平滑滑动，提供丝滑的输入反馈。
+- **Python**: 3.8 或更高版本
+- **主要依赖**:
+  - `PyQt6`: 图形界面框架
+  - `Pygments`: 语法高亮与词法分析
+  - `openai`: AI 接口通讯（兼容 DeepSeek）
 
----
+## 安装指南
 
-## ✨ 核心功能 (Features)
-
-| 功能模块 | 详细说明 |
-| :--- | :--- |
-| **主题引擎** | 内置浅色/深色模式，色彩配比参考 VS Code 官方标准。 |
-| **透明窗口** | 支持 10%-100% 背景透明度调节，练习时可隐约透出下方的技术文档或代码参考。 |
-| **指法参考** | 右侧可折叠面板，支持自定义上传多套键盘指法布局图。 |
-| **动态格言** | 底部轮播展示语录，支持外部 JSON 注入。 |
-
-image\2.png
-image\3.png
-
----
-
-## 🛠️ 技术架构 (Architecture)
-
-image\4.png
-
----
-
-## 快速开始 (Quick Start)
-
-### 环境要求
-- Python 3.8+
-- PyQt6
-- Pygments
-
-### 安装步骤
-1. **克隆并安装依赖**
+### 从源码运行
+1. **克隆仓库**
    ```bash
-   git clone https://github.com/your-username/CodeSpeedRunner.git
-   cd CodeSpeedRunner
-   pip install PyQt6 pygments
-   ```
-2. **准备资源**
-   - 在 `assets/snippets/` 放入你的代码文件（`.py`, `.js`, `.cpp` 等）。
-   - 在 `assets/animations/` 放入用于庆祝的 `.gif` 文件。
-   - 在 `assets/keyboards/` 放入指法图。
+   git clone [https://github.com/your-username/CodexRitual.git](https://github.com/your-username/CodexRitual.git)
+   cd CodexRitual
+创建并激活虚拟环境 (推荐)
 
-image\5.png
-image\6.png
-image\7.png
+python -m venv venv
+# Windows:
+.\venv\Scripts\Activate.ps1
+# macOS/Linux:
+source venv/bin/activate
+安装依赖
 
-3. **运行**
-   ```bash
-   python main.py
-   ```
+pip install PyQt6 pygments openai
+启动程序
 
-image\8.png
+python main.py
+独立运行 (Windows .exe)
+如果您使用的是打包后的 .exe 版本，请直接双击运行 CodexRitual.exe。程序会在首次启动时，自动在您的 我的文档/CodexRitual_Data 目录下生成配置文件和资源文件夹，您后续可以直接在该目录中管理您的资产。
 
----
+使用教程
+1. 基础练习
+从顶部的“当前练习”下拉菜单选择代码文件。
 
-## 📅 开发路线图 (Roadmap)
+按照界面提示进行键入。按下 Tab 键可快速跳过连续的缩进空格。
 
-- [x] 核心词法解析引擎
-- [x] 中文输入法兼容支持
-- [x] 多语言自动缩进跳过
-- [ ] 接入 AI 大模型一键生成代码注释，辅助理解 (计划中)
+点击顶部右侧的 [⌨️ 侧边栏] 可呼出或隐藏不同布局的键盘指法图。
 
-## 🤝 参与贡献
-如果你有更好的高亮配色方案或性能优化建议，欢迎提交 Pull Request 或 Issue。
+2. 激活 AI 导师
+点击右上角 [⚙️ 设置]。
 
-## 📄 许可证
-本项目基于 [MIT License](LICENSE) 协议开源。
+在“API 密钥”栏位中安全填入您的 DeepSeek 密钥 (或其他兼容的 OpenAI API Key)。
 
----
+选中一段需要练习的代码，点击顶部的 [✨ 一键生成注释]。
+
+系统将在后台调用 AI 并自动在当前目录下生成带有详细注释的新代码文件，随后自动重载高亮画布。
+
+3. 导入自定义代码
+您可以直接将代码文件放入 Documents/CodexRitual_Data/assets/snippets 目录中。
+
+或通过主界面 [⚙️ 设置] -> [📁 选择本地文件导入...] 快速将外部文件添加至练习环境。
+
+技术架构
+CodexRitual/
+├── core/                # 核心逻辑与系统引擎层
+│   ├── typing_logic.py  # 词法分析与键入状态机映射
+│   └── ai_bridge.py     # 异步多线程 AI 通讯模块
+├── gui/                 # 界面表现层 (PyQt6)
+│   ├── main_window.py   # 主窗口控制、信号路由与文件流转
+│   ├── editor_widget.py # 基于 QTextCursor 的高性能渲染画布
+│   └── theme_manager.py # 全局状态、QSS 样式及存储管理
+├── assets/              # 静态内置资源映射
+└── data/                # 提示词模板及默认配置
+
+开发者说明
+本项目具有极高的定制性：
+
+修改 AI 行为：程序会自动读取 data/ai_skill.txt 文件中的系统提示词 (System Prompt)。您可以通过修改此文本，令 AI 输出不同口吻或不同深度的代码注释。
+
+自定义语法颜色：可在 theme_manager.py 的字典中调整基于 Token 分类的 Hex 颜色值。
+
+许可证
+本项目基于 MIT License 协议开源。
