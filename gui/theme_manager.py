@@ -63,13 +63,15 @@ class ThemeManager:
     }
 
     def __init__(self):
-        # 将配置文件的路径指向外部的用户数据文件夹
         self.user_data_dir = Path.home() / "Documents" / "CodexRitual_Data"
         self.config_path = self.user_data_dir / "data" / "config.json"
         
         self.current_theme = "light"
         self.opacity = 1.0  
         self.api_key = ""  
+        self.api_base_url = "https://api.deepseek.com/v1" 
+        self.ai_model = "deepseek-chat" 
+        
         self._load_config()
 
     def _load_config(self):
@@ -79,18 +81,22 @@ class ThemeManager:
                     data = json.load(f)
                     self.current_theme = data.get("theme", "light")
                     self.opacity = data.get("opacity", 1.0)
-                    self.api_key = data.get("api_key", "") # 【新增】从文件中读取
+                    self.api_key = data.get("api_key", "")
+                    # 【新增】读取配置
+                    self.api_base_url = data.get("api_base_url", "https://api.deepseek.com/v1")
+                    self.ai_model = data.get("ai_model", "deepseek-chat")
             except Exception:
                 pass
 
     def save_config(self):
         self.config_path.parent.mkdir(exist_ok=True)
         with open(self.config_path, 'w', encoding='utf-8') as f:
-            # 【新增】将 api_key 一并存入 JSON
             json.dump({
                 "theme": self.current_theme, 
                 "opacity": self.opacity,
-                "api_key": self.api_key
+                "api_key": self.api_key,
+                "api_base_url": self.api_base_url,
+                "ai_model": self.ai_model
             }, f, indent=4)
 
     def get_canvas_colors(self) -> dict:

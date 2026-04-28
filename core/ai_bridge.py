@@ -1,59 +1,78 @@
 import importlib
 from PyQt6.QtCore import QThread, pyqtSignal
 
+import importlib
+import os
+import httpx
+from PyQt6.QtCore import QThread, pyqtSignal
+
 class AITaskWorker(QThread):
-    """
-    专门负责处理大模型请求的独立后台神经元。
-    继承 QThread，确保长时间的网络请求不会阻塞主 UI 线程。
-    """
-    # 定义信号：当任务完成或报错时，通过信号向主窗口汇报
     signal_finished = pyqtSignal(str)
     signal_error = pyqtSignal(str)
 
-    def __init__(self, provider_type: str, api_key: str, code: str, system_prompt: str):
+    # 【接收新参数：base_url 和 model_name】
+    def __init__(self, provider_type: str, api_key: str, base_url: str, model_name: str, context_code: str, prompt_text: str, task_type: str = "comment"):
         super().__init__()
         self.provider_type = provider_type
         self.api_key = api_key
-        self.code = code
-        self.system_prompt = system_prompt
+        self.base_url = base_url        # 动态地址
+        self.model_name = model_name    # 动态模型
+        self.context_code = context_code
+        self.prompt_text = prompt_text
+        self.task_type = task_type
 
     def run(self):
-        """线程启动后执行的核心逻辑"""
         try:
-            if self.provider_type == "deepseek":
-                # 动态导入，避免无用开销
+            if self.provider_type == "openai_compatible":
                 openai = importlib.import_module("openai")
-                
-                # 配置 DeepSeek 兼容客户端
+                import os
+                import httpx
+
+                os.environ['http_proxy'] = ''
+                os.environ['https_proxy'] = ''
+                os.environ['HTTP_PROXY'] = ''
+                os.environ['HTTPS_PROXY'] = ''
+                os.environ['ALL_PROXY'] = ''
+
+                direct_client = httpx.Client(proxy=None, trust_env=False)
+
+                # 【注入动态 Base URL】
                 client = openai.OpenAI(
                     api_key=self.api_key, 
-                    base_url="[https://api.deepseek.com](https://api.deepseek.com)"
+                    base_url=self.base_url,  # <--- 使用用户设置的 URL
+                    http_client=direct_client
                 )
                 
+                if self.task_type == "comment":
+                    messages = [
+                        {"role": "system", "content": self.prompt_text},
+                        {"role": "user", "content": self.context_code}
+                    ]
+                else: 
+                    messages = [
+                        {"role": "system", "content": "你是一个严谨的编程导师。请结合用户提供的当前代码上下文，专业且简明扼要地解答用户的疑问。"},
+                        {"role": "user", "content": f"【当前代码上下文】:\n{self.context_code}\n\n【我的问题】:\n{self.prompt_text}"}
+                    ]
+
                 response = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=[
-                        {"role": "system", "content": self.system_prompt},
-                        {"role": "user", "content": self.code}
-                    ],
+                    model=self.model_name,  # <--- 使用用户选定或输入的模型名
+                    messages=messages,
                     stream=False,
-                    temperature=0.3  # 较低的温度确保输出更稳定、更符合格式
+                    temperature=0.3
                 )
+
+                result_text = response.choices[0].message.content
                 
-                result_code = response.choices[0].message.content
-                
-                # 清理可能被大模型误加的 Markdown 代码块标记 (兜底策略)
-                if result_code.startswith("```"):
-                    lines = result_code.split("\n")
+                # 仅在注释模式下清理 Markdown
+                if self.task_type == "comment" and result_text.startswith("```"):
+                    lines = result_text.split("\n")
                     if len(lines) > 2:
-                        result_code = "\n".join(lines[1:-1])
+                        result_text = "\n".join(lines[1:-1])
                         
-                self.signal_finished.emit(result_code)
+                self.signal_finished.emit(result_text)
                 
             else:
                 self.signal_error.emit(f"暂未支持的 AI 引擎: {self.provider_type}")
                 
-        except ImportError:
-            self.signal_error.emit("环境缺失：请在终端运行 'pip install openai'")
         except Exception as e:
-            self.signal_error.emit(f"AI 脑波连接失败: {str(e)}")
+            self.signal_error.emit(f"{str(e)}")

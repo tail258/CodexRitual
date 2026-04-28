@@ -20,7 +20,7 @@ class SettingsDialog(QDialog):
     def __init__(self, theme_manager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("系统设置")
-        self.setFixedSize(350, 220) # 稍微加大窗口以容纳新选项
+        self.setFixedSize(350, 220)
         self.theme_manager = theme_manager
         
         layout = QFormLayout(self)
@@ -41,18 +41,48 @@ class SettingsDialog(QDialog):
         self.slider_opacity.valueChanged.connect(self._on_opacity_changed)
         layout.addRow("背景透明度:", self.slider_opacity)
 
-        # 3. 【新增】API Key 密码输入框
+        # ... (前面保留主题和透明度的代码) ...
+
+        # 3. API Key
         self.input_api_key = QLineEdit()
-        self.input_api_key.setEchoMode(QLineEdit.EchoMode.Password) # 密码掩码保护
-        self.input_api_key.setPlaceholderText("填入你的 DeepSeek API Key")
+        self.input_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.input_api_key.setPlaceholderText("填入 API Key")
         self.input_api_key.setText(self.theme_manager.api_key)
         self.input_api_key.textChanged.connect(self._on_api_key_changed)
         layout.addRow("API 密钥:", self.input_api_key)
 
-        # 4. 【新增】一键导入代码按钮
+        # 4. 【新增】接口地址 (Base URL)
+        self.input_base_url = QLineEdit()
+        self.input_base_url.setPlaceholderText("例如: https://api.deepseek.com/v1")
+        self.input_base_url.setText(self.theme_manager.api_base_url)
+        self.input_base_url.textChanged.connect(self._on_base_url_changed)
+        layout.addRow("接口地址:", self.input_base_url)
+
+        # 5. 【新增】模型选择 (下拉 + 可手动编辑)
+        self.combo_model = QComboBox()
+        self.combo_model.setEditable(True) # 允许用户手动输入其他厂家的模型名
+        self.combo_model.addItems([
+            "deepseek-chat",     # DeepSeek V3 (速度/常规)
+            "deepseek-reasoner", # DeepSeek R1 (深度思考/Pro)
+            "gpt-4o",            # OpenAI
+            "moonshot-v1-8k"     # 月之暗面 Kimi
+        ])
+        self.combo_model.setCurrentText(self.theme_manager.ai_model)
+        self.combo_model.currentTextChanged.connect(self._on_model_changed)
+        layout.addRow("AI 模型:", self.combo_model)
+
+        # 6. 外部代码导入按钮 ...
         self.btn_import = QPushButton("📁 选择本地文件导入...")
         self.btn_import.clicked.connect(self._import_code)
         layout.addRow("外部代码:", self.btn_import)
+
+    def _on_base_url_changed(self, text):
+        self.theme_manager.api_base_url = text.strip()
+        self.theme_manager.save_config()
+
+    def _on_model_changed(self, text):
+        self.theme_manager.ai_model = text.strip()
+        self.theme_manager.save_config()
 
     def _on_theme_changed(self, index):
         theme_id = self.combo_theme.itemData(index)
@@ -254,7 +284,7 @@ class CodeRunnerWindow(QMainWindow):
         
         self.chat_display = QTextBrowser()
         self.chat_display.setStyleSheet("font-family: Microsoft YaHei; font-size: 13px;")
-        self.chat_display.append("<b>[系统]</b> CodexRitual AI 导师已上线。点击顶部「一键生成注释」开始施法。")
+        self.chat_display.append("<b>[系统]</b> CodexRitual AI 已上线。")
         
         self.chat_input = QLineEdit()
         self.chat_input.setPlaceholderText("Enter and discuss with AI ...")
@@ -445,10 +475,26 @@ class CodeRunnerWindow(QMainWindow):
         self.chat_display.append("<br><b>[系统]</b> 正在向 DeepSeek 传输代码结构，请稍候...")
         
         # 4. 启动异步后台神经元
-        self.ai_worker = AITaskWorker("deepseek", api_key, current_code, system_prompt)
-        self.ai_worker.signal_finished.connect(self._on_ai_success)
-        self.ai_worker.signal_error.connect(self._on_ai_error)
-        self.ai_worker.start()
+        # 在 _generate_ai_comments 中找到这一行并修改：
+        self.ai_worker = AITaskWorker(
+            provider_type="openai_compatible", # 统一改为兼容模式
+            api_key=api_key, 
+            base_url=self.theme_manager.api_base_url, # 传入动态 URL
+            model_name=self.theme_manager.ai_model,   # 传入动态模型
+            context_code=current_code, 
+            prompt_text=system_prompt,
+            task_type="comment"
+        )
+
+        self.chat_worker = AITaskWorker(
+            provider_type="openai_compatible",
+            api_key=api_key, 
+            base_url=self.theme_manager.api_base_url, 
+            model_name=self.theme_manager.ai_model, 
+            context_code=current_code, 
+            prompt_text=user_text, 
+            task_type="chat"
+        )
 
     def _on_ai_success(self, new_code: str):
         """AI 处理成功，执行文件流转"""
@@ -484,11 +530,52 @@ class CodeRunnerWindow(QMainWindow):
         self.chat_display.append(f"<br><span style='color:#FF8080;'><b>[错误]</b> {error_msg}</span>")
 
     def _send_chat_message(self):
-        """处理左侧对话框的用户输入"""
+        """处理左侧对话框的用户输入并发送给大模型"""
         user_text = self.chat_input.text().strip()
         if not user_text: return
+        
+        # 1. 显示用户消息，并锁定输入框防止连续发送
         self.chat_display.append(f"<br><b>🧑‍💻 你:</b> {user_text}")
         self.chat_input.clear()
+        self.chat_input.setEnabled(False)
         
-        # 预留给未来的纯聊天接口
-        self.chat_display.append("<b>🤖 AI:</b> (聊天对话链路正在接入中...目前请先使用顶栏的一键注释功能！)")
+        api_key = self.theme_manager.api_key
+        if not api_key:
+            self.chat_display.append("<br><span style='color:#FF8080;'><b>[错误]</b> 缺少魔力源泉，请先在右上角「设置」中填入 API 密钥！</span>")
+            self.chat_input.setEnabled(True)
+            return
+
+        self.chat_display.append("<i>🤖 正在结合代码上下文推演逻辑，请稍候...</i>")
+        
+        # 2. 提取当前画布代码作为上下文，启动聊天神经元
+        current_code = self.canvas.toPlainText()
+        self.chat_worker = AITaskWorker(
+            provider_type="openai_compatible",
+            api_key=api_key, 
+            base_url=self.theme_manager.api_base_url, 
+            model_name=self.theme_manager.ai_model, 
+            context_code=current_code, 
+            prompt_text=user_text, 
+            task_type="chat"
+        )
+        self.chat_worker.signal_finished.connect(self._on_chat_success)
+        self.chat_worker.signal_error.connect(self._on_chat_error)
+        self.chat_worker.start()
+
+    def _on_chat_success(self, reply_text: str):
+        """AI 回复成功"""
+        # 将返回的换行符替换为 HTML 换行，保证排版美观
+        formatted_reply = reply_text.replace("\n", "<br>")
+        self.chat_display.append(f"<br><b>🤖 AI:</b> {formatted_reply}")
+        
+        # 解锁输入框，光标重新聚焦，并将滚动条拉到最底
+        self.chat_input.setEnabled(True)
+        self.chat_input.setFocus()
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _on_chat_error(self, error_msg: str):
+        """AI 连接失败"""
+        self.chat_display.append(f"<br><span style='color:#FF8080;'><b>[错误]</b> 脑波连接断开: {error_msg}</span>")
+        self.chat_input.setEnabled(True)
+        self.chat_input.setFocus()
