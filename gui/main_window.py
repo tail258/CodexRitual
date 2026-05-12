@@ -492,7 +492,7 @@ class CodeRunnerWindow(QMainWindow):
             base_url=self.theme_manager.api_base_url, 
             model_name=self.theme_manager.ai_model, 
             context_code=current_code, 
-            prompt_text=user_text, 
+            prompt_text=system_prompt, 
             task_type="chat"
         )
 
